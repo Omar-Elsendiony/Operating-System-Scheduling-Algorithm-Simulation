@@ -1,0 +1,83 @@
+now = getClk();
+	        ok = msgrcv(msgq_id, &message, sizeof(message.parameters), MSGTYPE, IPC_NOWAIT);
+            while (ok != -1){
+                
+                data2.id = message.parameters[0];
+                data2.arrivalTime = message.parameters[1];
+                data2.runningTime = message.parameters[2];
+                data2.priority = message.parameters[3];
+                data2.is_firstTime = 0;
+                doNotEnter = 0;
+                // if (!isEmpty(Q)){
+                //     peek(Q,&data3);
+                //     enqueue(Q,data2,data2.priority);
+                // }
+                // else{
+                    enqueue(Q,data2,data2.priority);
+                    
+                argv[1] = intTochar(data2.id);
+                argv[2] = intTochar(data2.runningTime);
+                argv[3] = theShared;
+                pid = fork();
+                if (getpid() != parentID){
+                    execv("process.out",argv);
+                }
+                ok = msgrcv(msgq_id, &message, sizeof(message.parameters), MSGTYPE, IPC_NOWAIT);
+            }
+	        if (!isEmpty(Q)){
+                if (!operatingProcess){
+                    peek(Q,&data3);
+                    operatingProcess = data3.id;
+                    opPriority = data3.priority;
+                        if (data3.is_firstTime == 0){ 
+                            shmaddr[3*operatingProcess] = STARTED;
+                            output(getClk(),operatingProcess,STARTED,data3.arrivalTime,data3.runningTime,
+                            data3.runningTime,shmaddr[3*operatingProcess+2]);
+                            data3.is_firstTime  = 1;
+                        }
+                        else{
+                            shmaddr[3*operatingProcess] = RESUMED;
+                            output(getClk(),operatingProcess,RESUMED,data3.arrivalTime,data3.runningTime,
+                            shmaddr[3*operatingProcess+1],shmaddr[3*operatingProcess+2]);
+                        }
+                }
+                else{
+                    peek(Q,&data3);                   
+                    opPriority = data3.priority;
+                    if (opPriority == data2.priority && data2.id == data3.id){
+                        shmaddr[3*operatingProcess] = STOPPED; 
+                        output(getClk(),operatingProcess,STOPPED,data3.arrivalTime,
+                        data3.runningTime,shmaddr[3*operatingProcess+1],shmaddr[3*operatingProcess+2]);
+                        operatingProcess = data2.id;
+                        opPriority = data2.priority;
+                        output(getClk(),operatingProcess,STARTED,data2.arrivalTime,data2.runningTime,
+                        data2.runningTime,shmaddr[3*operatingProcess+2]); 
+                        shmaddr[operatingProcess* 3] = STARTED;
+                    }
+                    else{
+                        shmaddr[3*data2.id] = STOPPED;
+                    }
+                }
+                while(getClk() - now == 0){
+                }
+                sleep(0.1);
+                if (shmaddr[operatingProcess*3] == FINISHED){
+                    output(getClk(),operatingProcess,FINISHED,data3.arrivalTime,
+                    data3.runningTime,shmaddr[3*operatingProcess+1],shmaddr[3*operatingProcess+2]);
+                    endedALL++;
+                    printf("Ended l %d \n",endedALL);
+                    operatingProcess = 0;
+                    dequeue(Q,&data3);
+                }
+            }
+            else{
+                if (!doNotEnter){
+                    currentTime = getClk(); 
+                    doNotEnter = 1; 
+                }   
+                if (getClk() - currentTime == 1){
+                    idleTime++;
+                    currentTime = getClk();
+                }      
+            }      
+        }
